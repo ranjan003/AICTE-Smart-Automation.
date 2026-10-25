@@ -111,10 +111,23 @@ export function AppProvider({ children }) {
     const checkN8n = async () => {
       const baseUrl = getN8nBaseUrl();
       try {
-        const res = await fetch(`${baseUrl}/webhook/application-submit`, {
+        let res = await fetch(`${baseUrl}/webhook/application-submit`, {
           method: "OPTIONS"
         }).catch(() => null);
-        setIsN8nConnected(!!res);
+
+        // Fallback to localhost:5678 or proxy if primary failed
+        if (!res || !res.ok) {
+          const localRes = await fetch("http://localhost:5678/webhook/application-submit", {
+            method: "OPTIONS"
+          }).catch(() => null);
+          if (localRes && (localRes.ok || localRes.status === 204)) {
+            setIsN8nConnected(true);
+            setLastSyncTime(new Date().toLocaleTimeString());
+            return;
+          }
+        }
+
+        setIsN8nConnected(!!(res && (res.ok || res.status === 204)));
       } catch {
         setIsN8nConnected(false);
       }
@@ -122,7 +135,7 @@ export function AppProvider({ children }) {
     };
 
     checkN8n();
-    const interval = setInterval(checkN8n, 45000);
+    const interval = setInterval(checkN8n, 20000);
     return () => clearInterval(interval);
   }, []);
 

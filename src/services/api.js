@@ -26,24 +26,48 @@ export function setN8nBaseUrl(url) {
  * Universal safe POST to n8n webhook with automatic fallback
  */
 async function callN8nWebhook(endpointPath, payload) {
-  const baseUrl = getN8nBaseUrl().replace(/\/+$/, "");
-  const fullUrl = `${baseUrl}${endpointPath.startsWith("/") ? "" : "/"}${endpointPath}`;
+  let baseUrl = getN8nBaseUrl().replace(/\/+$/, "");
+  let fullUrl = `${baseUrl}${endpointPath.startsWith("/") ? "" : "/"}${endpointPath}`;
+
+  const attemptFetch = async (targetUrl) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(targetUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  };
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 9000); // 9s timeout
-
-    const response = await fetch(fullUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
+    let response;
+    try {
+      response = await attemptFetch(fullUrl);
+      if (!response.ok && baseUrl.includes("ngrok")) {
+        // ngrok tunnel might be expired/offline, try localhost directly
+        throw new Error(`Ngrok returned HTTP ${response.status}`);
+      }
+    } catch (primaryErr) {
+      // Automatic fallback to local n8n instance or relative proxy
+      if (!baseUrl.includes("localhost:5678")) {
+        console.warn(`Primary webhook url ${fullUrl} failed, falling back to local n8n engine:`, primaryErr.message);
+        fullUrl = `http://localhost:5678${endpointPath.startsWith("/") ? "" : "/"}${endpointPath}`;
+        response = await attemptFetch(fullUrl);
+      } else {
+        throw primaryErr;
+      }
+    }
 
     if (!response.ok) {
       console.warn(`n8n webhook ${endpointPath} returned status ${response.status}`);
@@ -69,7 +93,7 @@ async function callN8nWebhook(endpointPath, payload) {
       isN8nLive: false,
       url: fullUrl,
       error: err.message,
-      message: "Webhook offline or ngrok tunnel paused. Falling back to local state engine."
+      message: "Webhook offline. Falling back to local state engine."
     };
   }
 }
