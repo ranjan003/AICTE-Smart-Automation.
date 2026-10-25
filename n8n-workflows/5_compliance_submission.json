@@ -1,0 +1,68 @@
+{
+  "name": "AICTE - 5. Compliance Submission & Re-Scrutiny",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "compliance-submit",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-compliance",
+      "name": "Webhook - Compliance Submit",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 240],
+      "webhookId": "aicte-compliance-submit"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\n\nconst cmpId = body.complianceId || 'CMP-' + Date.now();\nconst appId = body.applicationId;\nconst desc = body.description || 'Statutory compliance rectification evidence uploaded';\n\nconst now = new Date();\n\nreturn [{\n  json: {\n    complianceId: cmpId,\n    applicationId: appId,\n    newStage: 'Resubmitted',\n    newStatus: 'Rectification Evidence Uploaded - In Scrutiny Queue',\n    description: desc,\n    reviewerNotified: 'reviewer.ramanathan@aicte.gov.in',\n    timestamp: now.toISOString(),\n    auditAction: 'SUBMIT_COMPLIANCE'\n  }\n}];"
+      },
+      "id": "code-process-compliance",
+      "name": "Process Compliance Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"complianceId\": \"{{ $json.complianceId }}\",\n  \"applicationId\": \"{{ $json.applicationId }}\",\n  \"newStage\": \"{{ $json.newStage }}\",\n  \"message\": \"Compliance submission acknowledged. Re-scrutiny initiated.\",\n  \"timestamp\": \"{{ $json.timestamp }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-compliance",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [660, 240]
+    }
+  ],
+  "connections": {
+    "Webhook - Compliance Submit": {
+      "main": [
+        [
+          {
+            "node": "Process Compliance Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Compliance Record": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

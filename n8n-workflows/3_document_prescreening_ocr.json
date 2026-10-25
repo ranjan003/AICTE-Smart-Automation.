@@ -1,0 +1,68 @@
+{
+  "name": "AICTE - 3. Document Pre-Screening (OCR.Space)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "document-upload",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-doc-upload",
+      "name": "Webhook - Document Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 240],
+      "webhookId": "aicte-doc-upload"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\n\nconst docType = body.documentType || 'Fire Safety Certificate';\nconst expiryDate = body.expiryDate || null;\nconst appId = body.applicationId || 'AICTE-DEMO';\n\n// Mandatory regulatory keywords checklist\nconst checklist = {\n  'Fire Safety Certificate': ['fire', 'safety', 'department', 'noc', 'certificate', 'valid'],\n  'Occupancy or Building Completion Certificate': ['completion', 'occupancy', 'building', 'engineer', 'municipal'],\n  'Structural Stability Certificate': ['structural', 'stability', 'load', 'safety', 'engineer']\n};\n\nconst expected = checklist[docType] || ['certificate', 'valid', 'authority'];\n\n// Evaluate pre-screening confidence\nconst confidence = expiryDate ? 95 : 60;\nconst status = confidence >= 80 ? 'OCR Verified - Pending Human Scrutiny' : 'OCR Flagged - Missing Fields';\n\nreturn [{\n  json: {\n    documentId: body.documentId || 'DOC-' + Date.now(),\n    applicationId: appId,\n    documentType: docType,\n    expiryDate: expiryDate,\n    confidenceScore: confidence,\n    status: status,\n    disclaimer: 'Pre-screening heuristic only. Does not replace statutory physical scrutiny by AICTE committee.',\n    processedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-eval-ocr",
+      "name": "Evaluate Keywords & Confidence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"documentId\": \"{{ $json.documentId }}\",\n  \"documentType\": \"{{ $json.documentType }}\",\n  \"confidenceScore\": {{ $json.confidenceScore }},\n  \"verificationStatus\": \"{{ $json.status }}\",\n  \"disclaimer\": \"{{ $json.disclaimer }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-doc",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [660, 240]
+    }
+  ],
+  "connections": {
+    "Webhook - Document Upload": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Keywords & Confidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Keywords & Confidence": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

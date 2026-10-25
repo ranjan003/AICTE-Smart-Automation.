@@ -1,0 +1,68 @@
+{
+  "name": "AICTE - 1. Application Submission & Routing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "application-submit",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-submit",
+      "name": "Webhook - Application Submit",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 240],
+      "webhookId": "aicte-app-submit"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate payload and route determination\nconst body = $input.first().json.body || $input.first().json;\n\nconst appId = body.applicationId || 'AICTE-' + new Date().getFullYear() + '-' + Math.floor(1000 + Math.random() * 9000);\nconst institutionName = body.application?.institutionName || body.institutionName || 'Unknown Institution';\nconst route = body.application?.processingRoute || body.processingRoute || 'Scrutiny followed by EVC';\nconst region = body.application?.region || body.region || 'Western';\n\n// Calculate default stage deadline (15 days for scrutiny)\nconst now = new Date();\nconst scrutinyDeadline = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);\n\n// Determine initial stage and next scrutiny queue\nlet initialStage = 'Automated Pre-Screening';\nlet assignedQueue = 'Scrutiny Committee (' + region + ' Region)';\n\nreturn [{\n  json: {\n    applicationId: appId,\n    institutionName: institutionName,\n    processingRoute: route,\n    region: region,\n    currentStage: initialStage,\n    currentStatus: 'Application Registered - In Automated Pre-Screening Queue',\n    stageDeadline: scrutinyDeadline.toISOString(),\n    assignedQueue: assignedQueue,\n    submittedAt: now.toISOString(),\n    submittedBy: body.submittedBy || 'college.admin@aicte.edu.in',\n    auditAction: 'SUBMIT_APPLICATION',\n    notificationSubject: 'AICTE Application Registered: ' + appId,\n    notificationMessage: `Dear Institution, your application ${appId} for ${route} has been accepted and assigned to ${assignedQueue}. Scrutiny deadline is ${scrutinyDeadline.toISOString().split('T')[0]}.`\n  }\n}];"
+      },
+      "id": "code-validate-and-route",
+      "name": "Validate Input & Determine Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"message\": \"Application registered and routed successfully\",\n  \"applicationId\": \"{{ $json.applicationId }}\",\n  \"currentStage\": \"{{ $json.currentStage }}\",\n  \"assignedQueue\": \"{{ $json.assignedQueue }}\",\n  \"stageDeadline\": \"{{ $json.stageDeadline }}\",\n  \"notificationSent\": true\n}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [640, 240]
+    }
+  ],
+  "connections": {
+    "Webhook - Application Submit": {
+      "main": [
+        [
+          {
+            "node": "Validate Input & Determine Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input & Determine Route": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

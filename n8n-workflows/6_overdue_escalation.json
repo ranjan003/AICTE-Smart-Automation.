@@ -1,0 +1,97 @@
+{
+  "name": "AICTE - 6. Overdue Escalation Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "escalation-check",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-escalation",
+      "name": "Webhook - Escalation Check",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst now = new Date();\nconst appId = body.applicationId || 'AICTE-2026-9024';\n\nreturn [{\n  json: {\n    status: 'ESCALATION_CHECK_COMPLETED',\n    applicationId: appId,\n    fromEmail: 'salemranjan@gmail.com',\n    toEmail: 'rolexleo345678@gmail.com',\n    escalationLevel: 'Level 2 - Bureau Officer Alert',\n    emailSubject: 'OVERDUE ESCALATION NOTICE: Statutory Deficiency Deadline Lapsed [Ref: ' + appId + ']',\n    emailHtml: '<div style=\"font-family: Arial, sans-serif; padding: 20px;\"><div style=\"background-color: #991b1b; padding: 15px; color: white; border-radius: 6px;\"><h3 style=\"margin: 0;\">AICTE TIER-2 BUREAU ESCALATION NOTICE</h3><p style=\"margin: 3px 0 0 0; font-size: 12px;\">Compliance Surveillance Bureau &bull; Govt. of India</p></div><div style=\"padding: 15px; border: 1px solid #cbd5e1; border-top: none;\"><p>Dear College Administrator (Greenfield Institute of Technology / Ref: <strong>' + appId + '</strong>),</p><p>Our automated surveillance engine has recorded that your <strong>7-day statutory correction window has EXPIRED</strong> without receipt of the renewed Fire Safety Certificate.</p><div style=\"background: #fef2f2; border-left: 4px solid #b91c1c; padding: 12px; margin: 10px 0;\"><strong style=\"color: #991b1b;\">STATUS: ESCALATED TO REGIONAL DIRECTOR & BUREAU OFFICER</strong><p style=\"margin: 5px 0 0 0; color: #450a0a; font-size: 13px;\">Approval intake freeze recommendations have been forwarded to the Standing Appellate Committee (SAC).</p></div></div></div>',\n    timestamp: now.toISOString()\n  }\n}];"
+      },
+      "id": "code-escalation-logic",
+      "name": "Process Escalation Rules",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 240]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.fromEmail }}",
+        "toEmail": "={{ $json.toEmail }}",
+        "subject": "={{ $json.emailSubject }}",
+        "html": "={{ $json.emailHtml }}",
+        "options": {}
+      },
+      "id": "email-escalation",
+      "name": "Send Escalation Email via Gmail SMTP",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [660, 240],
+      "credentials": {
+        "smtp": {
+          "id": "KKiB2waUdQDO7kek",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "respond-escalation",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 240]
+    }
+  ],
+  "connections": {
+    "Webhook - Escalation Check": {
+      "main": [
+        [
+          {
+            "node": "Process Escalation Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Escalation Rules": {
+      "main": [
+        [
+          {
+            "node": "Send Escalation Email via Gmail SMTP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Escalation Email via Gmail SMTP": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

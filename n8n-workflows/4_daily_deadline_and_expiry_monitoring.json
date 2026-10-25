@@ -1,0 +1,97 @@
+{
+  "name": "AICTE - 4. Daily Deadline & Expiry Monitoring",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "simulate-time",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-time-monitor",
+      "name": "Webhook - Time Progression Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst simDate = body.simulatedDate || new Date().toISOString().split('T')[0];\nconst daysAdvanced = body.simulatedDaysAdvanced || 7;\n\nreturn [{\n  json: {\n    simulatedDate: simDate,\n    daysAdvanced: daysAdvanced,\n    fromEmail: 'salemranjan@gmail.com',\n    toEmail: 'rolexleo345678@gmail.com',\n    emailSubject: 'AICTE Compliance Reminder: Rectification Window Active [Ref: AICTE-2026-9024]',\n    emailHtml: '<div style=\"font-family: Arial, sans-serif; padding: 20px;\"><div style=\"background-color: #d97706; padding: 15px; color: white; border-radius: 6px;\"><h3 style=\"margin: 0;\">AICTE AUTOMATED COMPLIANCE REMINDER</h3><p style=\"margin: 3px 0 0 0; font-size: 12px;\">Approval Bureau &bull; Ministry of Education</p></div><div style=\"padding: 15px; border: 1px solid #fed7aa; border-top: none;\"><p>Dear College Administrator,</p><p>This is a periodic compliance reminder evaluated as of <strong>' + simDate + '</strong>.</p><p>Application <strong>AICTE-2026-9024</strong> has an active deficiency flag for <strong>Fire Safety Certificate</strong>. Please upload the rectified document to complete scrutiny.</p></div></div>',\n    status: 'SURVEILLANCE_RUN_COMPLETED',\n    evaluatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-monitor-deadlines",
+      "name": "Scan Deadlines & Expiries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 240]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.fromEmail }}",
+        "toEmail": "={{ $json.toEmail }}",
+        "subject": "={{ $json.emailSubject }}",
+        "html": "={{ $json.emailHtml }}",
+        "options": {}
+      },
+      "id": "email-reminder",
+      "name": "Send Reminder Email via Gmail SMTP",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [660, 240],
+      "credentials": {
+        "smtp": {
+          "id": "KKiB2waUdQDO7kek",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "respond-time",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 240]
+    }
+  ],
+  "connections": {
+    "Webhook - Time Progression Trigger": {
+      "main": [
+        [
+          {
+            "node": "Scan Deadlines & Expiries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan Deadlines & Expiries": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder Email via Gmail SMTP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder Email via Gmail SMTP": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "name": "AICTE - 2. Application Review & Stage Transition",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "application-review",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-review",
+      "name": "Webhook - Review Action",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [180, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst appId = body.applicationId || 'AICTE-2026-9024';\nconst action = body.reviewAction || 'RAISE_DEFICIENCY';\nconst notes = body.reviewNotes || 'Expired Fire Safety NOC. Valid certificate mandatory.';\nconst prevStage = body.previousStage || 'Scrutiny In Progress';\nconst now = new Date();\nlet nextStage = prevStage;\nlet nextStatus = 'Stage Updated';\nlet correctionDeadline = null;\n\nif (action === 'APPROVE_STAGE') {\n  nextStage = 'Pending EVC';\n  nextStatus = 'Scrutiny Cleared - Ready for EVC Schedule';\n} else if (action === 'RAISE_DEFICIENCY') {\n  nextStage = 'Deficiency Raised';\n  nextStatus = 'Awaiting College Correction: ' + notes;\n  correctionDeadline = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();\n}\n\nreturn [{\n  json: {\n    applicationId: appId,\n    reviewAction: action,\n    previousStage: prevStage,\n    newStage: nextStage,\n    newStatus: nextStatus,\n    correctionDeadline: correctionDeadline,\n    reviewNotes: notes,\n    fromEmail: 'salemranjan@gmail.com',\n    toEmail: 'rolexleo345678@gmail.com',\n    emailSubject: 'URGENT AICTE Notice: Document Deficiency & 7-Day Rectification [App: ' + appId + ']',\n    emailHtml: '<div style=\"font-family: Arial, sans-serif; padding: 20px;\"><div style=\"background-color: #0f2c59; padding: 15px; color: white; border-radius: 6px;\"><h3 style=\"margin: 0;\">ALL INDIA COUNCIL FOR TECHNICAL EDUCATION (AICTE)</h3><p style=\"margin: 3px 0 0 0; font-size: 12px; color: #f59e0b;\">Scrutiny Bureau &bull; Ministry of Education</p></div><div style=\"padding: 15px; border: 1px solid #e2e8f0; border-top: none;\"><p>Dear College Administrator,</p><p>During scrutiny of application <strong>' + appId + '</strong>, the following mandatory document deficiency was flagged:</p><div style=\"background: #fff1f2; border-left: 4px solid #e11d48; padding: 10px;\"><strong style=\"color: #9f1239;\">' + notes + '</strong></div><p>Statutory 7-day correction deadline: <strong>' + (correctionDeadline ? correctionDeadline.split('T')[0] : '7 days') + '</strong>.</p><p>Please upload the rectified document to the AICTE portal before the deadline to prevent Tier-2 Bureau Escalation.</p></div></div>',\n    timestamp: now.toISOString()\n  }\n}];"
+      },
+      "id": "code-evaluate-review",
+      "name": "Evaluate Transition & Deadlines",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 240]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $json.fromEmail }}",
+        "toEmail": "={{ $json.toEmail }}",
+        "subject": "={{ $json.emailSubject }}",
+        "html": "={{ $json.emailHtml }}",
+        "options": {}
+      },
+      "id": "email-deficiency",
+      "name": "Send Deficiency Email via Gmail SMTP",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [660, 240],
+      "credentials": {
+        "smtp": {
+          "id": "KKiB2waUdQDO7kek",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "respond-review",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 240]
+    }
+  ],
+  "connections": {
+    "Webhook - Review Action": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Transition & Deadlines",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Transition & Deadlines": {
+      "main": [
+        [
+          {
+            "node": "Send Deficiency Email via Gmail SMTP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Deficiency Email via Gmail SMTP": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
