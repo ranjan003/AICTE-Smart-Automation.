@@ -11,9 +11,11 @@ import {
 
 // Get base URL from environment or localStorage override
 export function getN8nBaseUrl() {
-  return localStorage.getItem("n8n_base_url") || 
-         import.meta.env.VITE_N8N_WEBHOOK_BASE_URL || 
-         "https://emphasize-latrine-backlog.ngrok-free.dev";
+  const stored = localStorage.getItem("n8n_base_url");
+  if (stored && !stored.includes("emphasize-latrine-backlog")) {
+    return stored;
+  }
+  return import.meta.env.VITE_N8N_WEBHOOK_BASE_URL || "http://localhost:5678";
 }
 
 export function setN8nBaseUrl(url) {

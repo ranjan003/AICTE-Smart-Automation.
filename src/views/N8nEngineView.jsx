@@ -92,15 +92,38 @@ export default function N8nEngineView() {
 
   const handleTestWebhook = async (ep) => {
     setTestingEndpoint(ep.id);
-    const fullUrl = `${baseUrlInput.replace(/\/+$/, "")}${ep.path}`;
+    let targetBase = (baseUrlInput || "http://localhost:5678").trim().replace(/\/+$/, "");
+    let fullUrl = `${targetBase}${ep.path}`;
 
     try {
       const start = performance.now();
-      const res = await fetch(fullUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(ep.payload)
-      });
+      let res;
+      try {
+        res = await fetch(fullUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(ep.payload)
+        });
+        if (!res.ok && targetBase.includes("ngrok")) {
+          throw new Error(`Tunnel status ${res.status}`);
+        }
+      } catch (tunnelErr) {
+        // If tunnel or custom URL failed, automatically fallback to local n8n on port 5678
+        if (!targetBase.includes("localhost:5678")) {
+          console.warn(`Tunnel ${fullUrl} failed, retrying via http://localhost:5678${ep.path}...`);
+          fullUrl = `http://localhost:5678${ep.path}`;
+          res = await fetch(fullUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(ep.payload)
+          });
+          setBaseUrlInput("http://localhost:5678");
+          setN8nBaseUrl("http://localhost:5678");
+        } else {
+          throw tunnelErr;
+        }
+      }
+
       const duration = Math.round(performance.now() - start);
 
       if (res.ok) {
@@ -109,7 +132,7 @@ export default function N8nEngineView() {
           ...prev,
           [ep.id]: {
             success: true,
-            status: res.status,
+            status: `${res.status} OK (${fullUrl.includes("localhost") ? "Local Engine" : "Ngrok Tunnel"})`,
             duration: `${duration}ms`,
             response: json
           }
@@ -132,7 +155,7 @@ export default function N8nEngineView() {
           success: false,
           status: "Network Error",
           duration: "N/A",
-          response: `${err.message}. Ngrok tunnel or n8n workflow might be inactive.`
+          response: `${err.message}. Ensure n8n is running at http://localhost:5678.`
         }
       }));
     } finally {
@@ -140,9 +163,10 @@ export default function N8nEngineView() {
     }
   };
 
-  const handleSaveBaseUrl = () => {
-    setN8nBaseUrl(baseUrlInput);
-    alert(`n8n Webhook base URL set to: ${baseUrlInput}`);
+  const handleSaveBaseUrl = (urlToSet) => {
+    const val = typeof urlToSet === "string" ? urlToSet : baseUrlInput;
+    setBaseUrlInput(val);
+    setN8nBaseUrl(val);
   };
 
   return (
@@ -173,25 +197,42 @@ export default function N8nEngineView() {
 
       {/* Webhook Base URL Configuration Box */}
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-        <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-          Configured ngrok Webhook Base URL
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            Active n8n Webhook Base URL
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handleSaveBaseUrl("http://localhost:5678")}
+              className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-semibold rounded-md cursor-pointer transition-colors"
+            >
+              Use Local (http://localhost:5678)
+            </button>
+            <button
+              onClick={() => handleSaveBaseUrl("https://emphasize-latrine-backlog.ngrok-free.dev")}
+              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[11px] font-semibold rounded-md cursor-pointer transition-colors"
+            >
+              Use Ngrok Tunnel
+            </button>
+          </div>
         </div>
         <div className="flex items-center space-x-2">
           <input
             type="text"
             value={baseUrlInput}
             onChange={(e) => setBaseUrlInput(e.target.value)}
+            placeholder="http://localhost:5678"
             className="grow p-2.5 rounded-lg border border-slate-200 bg-slate-50 font-mono text-xs focus:bg-white focus:ring-2 focus:ring-indigo-400 outline-none"
           />
           <button
-            onClick={handleSaveBaseUrl}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg cursor-pointer"
+            onClick={() => handleSaveBaseUrl(baseUrlInput)}
+            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg cursor-pointer transition-colors"
           >
             Update URL
           </button>
         </div>
         <p className="text-[11px] text-slate-500">
-          This base URL is used by the frontend to trigger n8n webhooks. If your ngrok tunnel restarts, update the URL here or in your <code>.env</code> file.
+          When running locally on your computer, use <code>http://localhost:5678</code>. No ngrok tunnel is required.
         </p>
       </div>
 
