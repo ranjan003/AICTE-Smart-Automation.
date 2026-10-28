@@ -1,12 +1,42 @@
-import React from "react";
+import React, { useState } from "react";
 import { useApp } from "../context/AppContext";
+import { triggerEscalationEngine } from "../services/api";
 import { 
   BellRing, AlertTriangle, ShieldAlert, Mail, 
-  CheckCircle, Clock, Zap, ArrowRight 
+  CheckCircle, Clock, Zap, ArrowRight, RefreshCw, Send
 } from "lucide-react";
 
 export default function AlertsEscalationView({ onSelectApp, onOpenSimModal }) {
   const { applications, documents, notifications, simulatedDate } = useApp();
+  const [isTriggering, setIsTriggering] = useState(false);
+  const [triggerStatus, setTriggerStatus] = useState(null);
+
+  const handleRunEscalationEngine = async () => {
+    setIsTriggering(true);
+    setTriggerStatus(null);
+    try {
+      const primaryApp = escalatedApps[0]?.applicationId || "AICTE-2026-9024";
+      const res = await triggerEscalationEngine(primaryApp);
+      if (res && res.success) {
+        setTriggerStatus({
+          success: true,
+          message: `Tier-2 Escalation triggered successfully via n8n! Escalation email dispatched to rolexleo345678@gmail.com.`
+        });
+      } else {
+        setTriggerStatus({
+          success: false,
+          message: res?.message || "Escalation check completed (local fallback mode)."
+        });
+      }
+    } catch (err) {
+      setTriggerStatus({
+        success: false,
+        message: `Trigger error: ${err.message}`
+      });
+    } finally {
+      setIsTriggering(false);
+    }
+  };
 
   const escalatedApps = applications.filter(a => a.escalationStatus && a.escalationStatus !== "Normal");
 
@@ -55,14 +85,58 @@ export default function AlertsEscalationView({ onSelectApp, onOpenSimModal }) {
           </p>
         </div>
 
-        <button
-          onClick={onOpenSimModal}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 transition cursor-pointer shadow-xs"
-        >
-          <Zap className="w-4 h-4" />
-          <span>Advance Clock & Test Escalations</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleRunEscalationEngine}
+            disabled={isTriggering}
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 transition cursor-pointer shadow-xs"
+          >
+            {isTriggering ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Triggering n8n...</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                <span>Execute Workflow 6 (Escalation Engine)</span>
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={onOpenSimModal}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 transition cursor-pointer shadow-xs"
+          >
+            <Zap className="w-4 h-4" />
+            <span>Advance Clock & Test Escalations</span>
+          </button>
+        </div>
       </div>
+
+      {/* Trigger Status Banner */}
+      {triggerStatus && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between text-xs animate-in fade-in ${
+          triggerStatus.success 
+            ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+            : "bg-amber-50 border-amber-200 text-amber-800"
+        }`}>
+          <div className="flex items-center space-x-2">
+            {triggerStatus.success ? (
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            )}
+            <span className="font-medium">{triggerStatus.message}</span>
+          </div>
+          <button 
+            onClick={() => setTriggerStatus(null)} 
+            className="text-xs font-bold underline cursor-pointer ml-3"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Escalation Hierarchy Architecture Card */}
       <div className="bg-slate-900 text-slate-200 rounded-xl p-4 border border-slate-800 text-xs">

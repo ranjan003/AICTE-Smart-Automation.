@@ -478,7 +478,7 @@ export async function simulateTimeProgression(daysToAdvance, simulatedDateStr, c
     }
   }
 
-  // Trigger n8n simulated time webhook & escalation webhook
+  // Trigger n8n simulated time webhook
   const n8nResult = await callN8nWebhook("/webhook/simulate-time", {
     simulatedDaysAdvanced: daysToAdvance,
     simulatedDate: simulatedDateStr,
@@ -486,13 +486,39 @@ export async function simulateTimeProgression(daysToAdvance, simulatedDateStr, c
     escalatedCount: escalatedApps.length
   });
 
+  // If overdue files exist or time advanced by >= 15 days, trigger escalation engine webhook
+  let escalationResult = null;
+  if (escalatedApps.length > 0 || daysToAdvance >= 15) {
+    const primaryAppId = escalatedApps[0]?.applicationId || "AICTE-2026-9024";
+    escalationResult = await callN8nWebhook("/webhook/escalation-check", {
+      action: "CHECK_ESCALATIONS",
+      criteria: "OVERDUE_DEFICIENCIES",
+      applicationId: primaryAppId,
+      escalatedCount: escalatedApps.length,
+      simulatedDate: simulatedDateStr
+    });
+  }
+
   return {
     simulatedDate: simulatedDateStr,
     daysAdvanced: daysToAdvance,
     alerts: alertsGenerated,
     escalatedCount: escalatedApps.length,
-    n8nResult
+    n8nResult,
+    escalationResult
   };
+}
+
+// -------------------------------------------------------------
+// WORKFLOW 6: DIRECT TRIGGER ESCALATION ENGINE
+// -------------------------------------------------------------
+export async function triggerEscalationEngine(applicationId = "AICTE-2026-9024") {
+  return await callN8nWebhook("/webhook/escalation-check", {
+    action: "CHECK_ESCALATIONS",
+    criteria: "OVERDUE_DEFICIENCIES",
+    applicationId,
+    timestamp: new Date().toISOString()
+  });
 }
 
 // -------------------------------------------------------------
