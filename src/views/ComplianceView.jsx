@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useApp } from "../context/AppContext";
 import { 
   AlertOctagon, CheckCircle, Clock, FileText, 
-  Send, ShieldCheck, ArrowRight, Upload
+  Send, ShieldCheck, ArrowRight, Upload, RefreshCw, Sparkles, AlertTriangle
 } from "lucide-react";
 import { submitComplianceCorrection } from "../services/api";
 
@@ -12,10 +12,50 @@ export default function ComplianceView({ onSelectApp }) {
   const [activeDefApp, setActiveDefApp] = useState(null);
   const [rectificationText, setRectificationText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusBanner, setStatusBanner] = useState(null);
 
   // Deficient applications
   const deficientApps = applications.filter(a => a.currentStage === "Deficiency Raised");
   const resubmittedApps = applications.filter(a => a.currentStage === "Resubmitted");
+
+  // Direct trigger of Workflow 5
+  const handleDirectWorkflow5Trigger = async () => {
+    setIsSubmitting(true);
+    setStatusBanner(null);
+    try {
+      const targetAppId = deficientApps[0]?.applicationId || "AICTE-2026-9024";
+      const res = await submitComplianceCorrection({
+        applicationId: targetAppId,
+        institutionId: "INST-MH-2041",
+        undertakingDescription: "Statutory compliance rectification evidence uploaded: Renewed Fire Safety NOC and updated building blueprint.",
+        evidenceReference: `uploads/INST-MH-2041/rectified_evidence_${Date.now()}.pdf`
+      }, currentUser);
+
+      setApplications(prev => prev.map(a => 
+        a.applicationId === targetAppId
+          ? {
+              ...a,
+              currentStage: "Resubmitted",
+              currentStatus: "Compliance Rectification Uploaded - Ready for Scrutiny",
+              correctionDeadline: null,
+              escalationStatus: "Normal"
+            }
+          : a
+      ));
+
+      setStatusBanner({
+        success: true,
+        message: `Workflow 5 Executed via n8n! Application ${targetAppId} compliance submitted successfully. Status updated to 'Resubmitted' (HTTP 200 OK).`
+      });
+    } catch (e) {
+      setStatusBanner({
+        success: false,
+        message: `Error executing Workflow 5: ${e.message}`
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleQuickSubmit = async (app) => {
     if (!rectificationText) {
@@ -24,6 +64,7 @@ export default function ComplianceView({ onSelectApp }) {
     }
 
     setIsSubmitting(true);
+    setStatusBanner(null);
     try {
       await submitComplianceCorrection({
         applicationId: app.applicationId,
@@ -38,36 +79,107 @@ export default function ComplianceView({ onSelectApp }) {
               ...a,
               currentStage: "Resubmitted",
               currentStatus: "Compliance Rectification Uploaded - Ready for Scrutiny",
-              correctionDeadline: null
+              correctionDeadline: null,
+              escalationStatus: "Normal"
             }
           : a
       ));
 
-      alert("Compliance submitted successfully. Status updated to Resubmitted.");
+      setStatusBanner({
+        success: true,
+        message: `Workflow 5 Executed via n8n! Application ${app.applicationId} rectification submitted. Status updated to 'Resubmitted'.`
+      });
       setActiveDefApp(null);
       setRectificationText("");
     } catch (e) {
-      alert(`Error submitting compliance: ${e.message}`);
+      setStatusBanner({
+        success: false,
+        message: `Error submitting compliance: ${e.message}`
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Helper to re-flag an application as deficient for demo testing
+  const handleLoadSampleDeficiency = () => {
+    setApplications(prev => prev.map(a => 
+      a.applicationId === "AICTE-2026-9024"
+        ? {
+            ...a,
+            currentStage: "Deficiency Raised",
+            currentStatus: "Awaiting College Correction: Expired Fire NOC & Land Document Rectification",
+            correctionDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+          }
+        : a
+    ));
+    setStatusBanner({
+      success: true,
+      message: "Sample Deficient Application AICTE-2026-9024 loaded! You can now submit its rectification dossier."
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs">
-        <div className="flex items-center space-x-2 text-amber-600 font-bold text-xs uppercase tracking-wide">
-          <AlertOctagon className="w-4 h-4" />
-          <span>Statutory Compliance & Deficiency Resolution Portal</span>
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center space-x-2 text-amber-600 font-bold text-xs uppercase tracking-wide">
+            <AlertOctagon className="w-4 h-4" />
+            <span>Statutory Compliance & Deficiency Resolution Portal</span>
+          </div>
+          <h2 className="text-lg font-bold text-slate-900 mt-1">
+            Deficiency Rectification & Undertaking Monitoring
+          </h2>
+          <p className="text-xs text-slate-500">
+            When statutory deficiencies are raised during scrutiny, institutions must upload evidence within the compliance window. Unresolved deficiencies escalate to the Bureau Officer.
+          </p>
         </div>
-        <h2 className="text-lg font-bold text-slate-900 mt-1">
-          Deficiency Rectification & Undertaking Monitoring
-        </h2>
-        <p className="text-xs text-slate-500">
-          When statutory deficiencies are raised during scrutiny, institutions must upload evidence within the 7-day compliance window. Unresolved deficiencies escalate to the Bureau Officer.
-        </p>
+
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleDirectWorkflow5Trigger}
+            disabled={isSubmitting}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center space-x-1.5 transition cursor-pointer shadow-xs"
+          >
+            {isSubmitting ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Executing Workflow 5...</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-4 h-4" />
+                <span>Execute Workflow 5 (Submit Rectification)</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Trigger Status Banner */}
+      {statusBanner && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between text-xs animate-in fade-in ${
+          statusBanner.success 
+            ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
+            : "bg-amber-50 border-amber-200 text-amber-800"
+        }`}>
+          <div className="flex items-center space-x-2">
+            {statusBanner.success ? (
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            )}
+            <span className="font-medium">{statusBanner.message}</span>
+          </div>
+          <button 
+            onClick={() => setStatusBanner(null)} 
+            className="text-xs font-bold underline cursor-pointer ml-3"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Grid of Active Deficiencies */}
       <div className="space-y-4">
@@ -77,10 +189,18 @@ export default function ComplianceView({ onSelectApp }) {
         </div>
 
         {deficientApps.length === 0 ? (
-          <div className="bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-500 text-xs">
-            <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-            <p className="font-semibold text-slate-700">No active deficiencies pending resolution!</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">All applications are either progressing through scrutiny or cleared.</p>
+          <div className="bg-white p-8 rounded-xl border border-slate-200 text-center text-slate-500 text-xs space-y-3">
+            <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-1" />
+            <p className="font-semibold text-slate-700">No active deficiencies currently pending!</p>
+            <p className="text-[11px] text-slate-400 max-w-md mx-auto">
+              All applications are cleared or resubmitted. You can execute Workflow 5 directly with the button above or load a sample deficient file below.
+            </p>
+            <button
+              onClick={handleLoadSampleDeficiency}
+              className="mt-2 px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg font-semibold text-xs cursor-pointer transition"
+            >
+              Load Sample Deficient Application (AICTE-2026-9024)
+            </button>
           </div>
         ) : (
           deficientApps.map((app) => {
@@ -166,15 +286,26 @@ export default function ComplianceView({ onSelectApp }) {
                       className="w-full p-2.5 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                     />
 
-                    <div className="flex items-center justify-end space-x-2">
+                    <div className="flex items-center justify-between">
                       <button
-                        onClick={() => handleQuickSubmit(app)}
-                        disabled={isSubmitting}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
+                        type="button"
+                        onClick={() => setRectificationText("Obtained renewed Fire Safety NOC No. FS/2026/884 from Pune Municipal Fire Brigade valid till 30-Aug-2027. Certified blueprint attached.")}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer flex items-center space-x-1"
                       >
-                        <Send className="w-3.5 h-3.5 mr-1" />
-                        <span>{isSubmitting ? "Submitting..." : "Submit Rectification to n8n"}</span>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Auto-Fill Sample Remarks</span>
                       </button>
+
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleQuickSubmit(app)}
+                          disabled={isSubmitting}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
+                        >
+                          <Send className="w-3.5 h-3.5 mr-1" />
+                          <span>{isSubmitting ? "Submitting to n8n..." : "Submit Rectification (Workflow 5)"}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
